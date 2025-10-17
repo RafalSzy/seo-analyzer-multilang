@@ -516,72 +516,7 @@ const indexHTML = `
             </div>
         </div>
         
-        ${pagesWithProblems.length > 0 ? `
-        <div class="problems-summary">
-            <h2>📊 Podsumowanie problemów SEO</h2>
-            
-            <div class="problems-grid">
-                <div class="problem-card">
-                    <h4>🎯 Ogólne statystyki</h4>
-                    <div class="problem-stat">
-                        <span class="problem-label">Strony z problemami:</span>
-                        <span class="problem-count ${problemStats.total > this.seoData.length * 0.5 ? 'critical' : problemStats.total > this.seoData.length * 0.2 ? 'warning' : 'good'}">${problemStats.total}/${this.seoData.length}</span>
-                    </div>
-                    <div class="problem-stat">
-                        <span class="problem-label">Procent z problemami:</span>
-                        <span class="problem-count ${problemStats.total > this.seoData.length * 0.5 ? 'critical' : problemStats.total > this.seoData.length * 0.2 ? 'warning' : 'good'}">${Math.round((problemStats.total / this.seoData.length) * 100)}%</span>
-                    </div>
-                </div>
-                
-                <div class="problem-card">
-                    <h4>📝 Problemy z treścią</h4>
-                    <div class="problem-stat">
-                        <span class="problem-label">Problemy z tytułem:</span>
-                        <span class="problem-count ${problemStats.byType.titleProblems > 0 ? 'warning' : 'good'}">${problemStats.byType.titleProblems}</span>
-                    </div>
-                    <div class="problem-stat">
-                        <span class="problem-label">Problemy z opisem:</span>
-                        <span class="problem-count ${problemStats.byType.descProblems > 0 ? 'warning' : 'good'}">${problemStats.byType.descProblems}</span>
-                    </div>
-                    <div class="problem-stat">
-                        <span class="problem-label">Problemy z H1:</span>
-                        <span class="problem-count ${problemStats.byType.h1Problems > 0 ? 'warning' : 'good'}">${problemStats.byType.h1Problems}</span>
-                    </div>
-                </div>
-                
-                <div class="problem-card">
-                    <h4>🖼️ Problemy techniczne</h4>
-                    <div class="problem-stat">
-                        <span class="problem-label">Problemy z OG Image:</span>
-                        <span class="problem-count ${problemStats.byType.ogImageProblems > 0 ? 'warning' : 'good'}">${problemStats.byType.ogImageProblems}</span>
-                    </div>
-                    <div class="problem-stat">
-                        <span class="problem-label">Brak canonical:</span>
-                        <span class="problem-count ${problemStats.byType.canonicalProblems > 0 ? 'warning' : 'good'}">${problemStats.byType.canonicalProblems}</span>
-                    </div>
-                    <div class="problem-stat">
-                        <span class="problem-label">Obrazki bez ALT:</span>
-                        <span class="problem-count ${problemStats.byType.altProblems > 0 ? 'warning' : 'good'}">${problemStats.byType.altProblems}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="score-distribution">
-                <div class="score-group critical">
-                    <div class="score-group-value">${problemStats.critical}</div>
-                    <div class="score-group-label">Krytyczne (< 60)</div>
-                </div>
-                <div class="score-group warning">
-                    <div class="score-group-value">${problemStats.warning}</div>
-                    <div class="score-group-label">Ostrzeżenia (60-79)</div>
-                </div>
-                <div class="score-group good">
-                    <div class="score-group-value">${problemStats.good}</div>
-                    <div class="score-group-label">Dobre (80+)</div>
-                </div>
-            </div>
-        </div>
-        ` : '<div class="alert alert-success">✅ Gratulacje! Wszystkie strony są w dobrej kondycji SEO.</div>'}
+        <!-- Usunięto sekcję podsumowania problemów SEO z landing page. Statystyki szczegółowe są dostępne w generowanych raportach. -->
     </div>
     
     <script>
@@ -1134,19 +1069,40 @@ class SEOAnalyzer {
 
     async fetchPageMetadata(url) {
         try {
-            const response = await axios.get(url, {
-                headers: {
-                    'User-Agent': 'Mozilla/5.0 SEO Analyzer Bot'
-                },
-                timeout: 10000
-            });
+            // Pobierz stronę z mechanizmem ponawiania w przypadku błędów
+            const tryGet = async (u, attempts = 3) => {
+                let lastErr;
+                for (let i = 0; i < attempts; i++) {
+                    try {
+                        return await axios.get(u, {
+                            headers: { 'User-Agent': 'Mozilla/5.0 SEO Analyzer Bot' },
+                            timeout: 10000
+                        });
+                    } catch (e) {
+                        lastErr = e;
+                        // Przy błędach 429 lub 5xx poczekaj i spróbuj ponownie
+                        const status = e.response?.status || 0;
+                        if (status === 429 || status >= 500) {
+                            await new Promise(r => setTimeout(r, 1500 * (i + 1)));
+                            continue;
+                        } else {
+                            break;
+                        }
+                    }
+                }
+                throw lastErr;
+            };
+
+            const response = await tryGet(url);
             
             const $ = cheerio.load(response.data);
-            
-            // Wykryj język strony
+
+            // Wykryj język strony z URL
             const detectedLang = this.detectLanguageFromUrl(url);
-            const htmlLang = $('html').attr('lang') || detectedLang;
-            
+            // Normalizuj atrybut lang w html (np. pl-PL -> pl)
+            const normLang = (l) => (l || '').toLowerCase().split('-')[0];
+            const htmlLang = normLang($('html').attr('lang')) || detectedLang;
+
             const metadata = {
                 url: url,
                 language: htmlLang || detectedLang,
@@ -1172,33 +1128,43 @@ class SEOAnalyzer {
                 seoIssues: [] // Inicjalizacja na początku
             };
             
-            // Sprawdź status OG Image jeśli istnieje
+            // Normalizuj adresy kanoniczne, og:url i og:image (obsługa względnych ścieżek)
+            const makeAbs = (maybeUrl) => {
+                try {
+                    return maybeUrl ? new URL(maybeUrl, url).href : '';
+                } catch {
+                    return maybeUrl || '';
+                }
+            };
+            metadata.canonical = makeAbs(metadata.canonical);
+            metadata.ogUrl = makeAbs(metadata.ogUrl);
+            metadata.ogImage = makeAbs(metadata.ogImage);
+
+            // Sprawdź status OG Image jeśli istnieje z fallbackiem HEAD->GET
             if (metadata.ogImage) {
                 try {
-                    // Napraw względne URLe
-                    if (metadata.ogImage.startsWith('/')) {
-                        const baseUrl = new URL(url);
-                        metadata.ogImage = `${baseUrl.protocol}//${baseUrl.host}${metadata.ogImage}`;
-                    }
-                    
-                    // Szybkie sprawdzenie czy obrazek istnieje (HEAD request)
-                    const imageResponse = await axios.head(metadata.ogImage, {
+                    let imageResp = await axios.head(metadata.ogImage, {
                         timeout: 5000,
-                        validateStatus: function (status) {
-                            return status < 500; // Akceptuj wszystkie statusy < 500
-                        }
+                        validateStatus: (status) => status < 500
                     });
-                    
-                    if (imageResponse.status === 200) {
+                    // Niektóre serwery nie wspierają HEAD – fallback do GET
+                    if (imageResp.status === 405 || imageResp.status === 403) {
+                        imageResp = await axios.get(metadata.ogImage, {
+                            timeout: 7000,
+                            responseType: 'stream',
+                            validateStatus: (status) => status < 500
+                        });
+                    }
+                    if (imageResp.status === 200) {
                         metadata.ogImageStatus = 'ok';
-                    } else if (imageResponse.status === 404) {
+                    } else if (imageResp.status === 404) {
                         metadata.ogImageStatus = '404';
                         metadata.seoIssues.push(`OG Image zwraca 404: ${metadata.ogImage}`);
-                    } else if (imageResponse.status >= 300 && imageResponse.status < 400) {
+                    } else if (imageResp.status >= 300 && imageResp.status < 400) {
                         metadata.ogImageStatus = 'redirect';
                     } else {
-                        metadata.ogImageStatus = `error-${imageResponse.status}`;
-                        metadata.seoIssues.push(`OG Image zwraca błąd ${imageResponse.status}`);
+                        metadata.ogImageStatus = `error-${imageResp.status}`;
+                        metadata.seoIssues.push(`OG Image zwraca błąd ${imageResp.status}`);
                     }
                 } catch (imgError) {
                     metadata.ogImageStatus = 'unreachable';
@@ -1243,6 +1209,14 @@ class SEOAnalyzer {
             
             if (!metadata.canonical) {
                 metadata.seoIssues.push('Brak canonical URL');
+            }
+            // Sprawdź robots noindex/nofollow
+            const robotsDirectives = (metadata.robots || '').toLowerCase();
+            if (robotsDirectives.includes('noindex')) {
+                metadata.seoIssues.push('Strona oznaczona jako noindex');
+            }
+            if (robotsDirectives.includes('nofollow')) {
+                metadata.seoIssues.push('Strona oznaczona jako nofollow');
             }
             
             metadata.seoScore = Math.max(0, 100 - (metadata.seoIssues.length * 10));
@@ -1331,15 +1305,15 @@ class SEOAnalyzer {
                     }
                 }
             } else {
-                // Strona nie ma hreflang - może brakować tłumaczeń
-                if (page.language === 'pl' && !page.url.includes('/en/')) {
-                    // Sprawdź czy istnieje angielska wersja
-                    const expectedEnUrl = page.url.replace('rafalszymanski.pl', 'rafalszymanski.pl/en');
-                    const hasEnVersion = this.seoData.some(p => 
-                        p.url.includes('/en/') && 
-                        p.url.includes(page.url.split('/').pop())
-                    );
-                    
+                // Strona nie ma hreflang - może brakować tłumaczeń. Sprawdzaj tylko w obrębie tej samej domeny.
+                const pageDomain = new URL(page.url).hostname.replace('www.', '');
+                if (pageDomain === this.domain && page.language === 'pl' && !page.url.includes('/en/')) {
+                    // Oczekiwana angielska wersja (przy założeniu struktury /en/)
+                    const expectedEnUrl = page.url.replace(pageDomain, `${pageDomain}/en`);
+                    const hasEnVersion = this.seoData.some(p => {
+                        const pDomain = new URL(p.url).hostname.replace('www.', '');
+                        return pDomain === this.domain && p.url.includes('/en/') && p.url.includes(page.url.split('/').pop());
+                    });
                     if (!hasEnVersion) {
                         missingTranslations.push({
                             sourceUrl: page.url,
@@ -2061,23 +2035,45 @@ app.post('/api/analyze', async (req, res) => {
             message: `Znaleziono ${analyzer.urls.length} URL do analizy${isIndex ? ' (ze wszystkich sitemap w indeksie)' : ''}` 
         });
         
-        // Analizuj każdy URL
-        for (let i = 0; i < analyzer.urls.length; i++) {
-            const url = analyzer.urls[i];
-            const progress = Math.round((i + 1) / analyzer.urls.length * 80) + 10;
-            
-            sendEvent({ 
-                type: 'progress', 
-                progress, 
-                message: `Analizuję [${i + 1}/${analyzer.urls.length}]: ${url.substring(0, 50)}...` 
+        // Analizuj każdy URL z ograniczeniem współbieżności (np. 5 równoległych)
+        const pLimit = (concurrency) => {
+            const queue = [];
+            let active = 0;
+            const next = () => {
+                if (queue.length && active < concurrency) {
+                    active++;
+                    queue.shift()();
+                }
+            };
+            return (fn) => (...args) => new Promise((resolve, reject) => {
+                queue.push(async () => {
+                    try {
+                        resolve(await fn(...args));
+                    } catch (e) {
+                        reject(e);
+                    } finally {
+                        active--;
+                        next();
+                    }
+                });
+                next();
             });
-            
-            const metadata = await analyzer.fetchPageMetadata(url);
+        };
+
+        const limit = pLimit(5);
+        let completed = 0;
+        const total = analyzer.urls.length;
+        await Promise.all(analyzer.urls.map((u) => limit(async () => {
+            const metadata = await analyzer.fetchPageMetadata(u);
             analyzer.seoData.push(metadata);
-            
-            // Czekaj chwilę między requestami
-            await new Promise(resolve => setTimeout(resolve, 500));
-        }
+            completed++;
+            const prog = Math.round((completed / total) * 80) + 10;
+            sendEvent({
+                type: 'progress',
+                progress: prog,
+                message: `Analizuję [${completed}/${total}]: ${u.substring(0, 50)}...`
+            });
+        })));
         
         // Oblicz statystyki
         const stats = {
