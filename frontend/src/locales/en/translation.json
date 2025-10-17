@@ -1,0 +1,19 @@
+{
+  "title": "SEO Analyzer",
+  "enterSitemapUrl": "Enter sitemap URL",
+  "checkMultipleSitemaps": "Check sitemap index",
+  "detectLanguages": "Detect languages",
+  "checkDuplicates": "Check duplicates",
+  "analyze": "Analyze",
+  "progress": "Progress",
+  "theme": "Theme",
+  "light": "Light",
+  "dark": "Dark",
+  "language": "Language",
+  "polish": "Polish",
+  "english": "English",
+  "placeholderSitemap": "https://example.com/sitemap.xml",
+  "noResults": "No results yet",
+  "results": "Results",
+  "downloadCSV": "Download CSV"
+}
