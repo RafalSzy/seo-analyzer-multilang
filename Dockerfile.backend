@@ -1,0 +1,12 @@
+# Używamy oficjalnego Node.js
+FROM node:18
+# Ustawiamy katalog roboczy
+WORKDIR /app
+# Kopiujemy pliki package.json i package-lock.json
+COPY package*.json ./
+RUN npm ci
+# Kopiujemy caly projekt backendu (seo-analyzer-multilang.js i inne)
+COCOPY . .
+# Wystawiamy port 3000 (Express)
+EXPOSE 3000
+CMD ["node", "seo-analyzer-multilang.js"]
