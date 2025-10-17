@@ -4,7 +4,6 @@
 // Następnie otwórz: http://localhost:3000
 
 import express from 'express';
-const VERSION = '1.1.0';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import xml2js from 'xml2js';
@@ -1218,6 +1217,84 @@ class SEOAnalyzer {
             }
             if (robotsDirectives.includes('nofollow')) {
                 metadata.seoIssues.push('Strona oznaczona jako nofollow');
+            }
+
+            // --- Structured data validation (JSON-LD) ---
+            try {
+                const ldScripts = $('script[type="application/ld+json"]');
+                let hasStructured = false;
+                let structuredValid = true;
+                ldScripts.each((i, el) => {
+                    const text = $(el).contents().text().trim();
+                    if (!text) return;
+                    try {
+                        const data = JSON.parse(text);
+                        hasStructured = true;
+                        // check for required JSON-LD properties
+                        if (!data['@context'] || !data['@type']) {
+                            structuredValid = false;
+                        }
+                    } catch {
+                        structuredValid = false;
+                    }
+                });
+                metadata.hasStructuredData = hasStructured;
+                metadata.structuredDataValid = structuredValid;
+                if (!hasStructured) {
+                    metadata.seoIssues.push('Brak danych strukturalnych (structured data)');
+                } else if (!structuredValid) {
+                    metadata.seoIssues.push('Niepoprawne dane strukturalne');
+                }
+            } catch (e) {
+                // ignore parsing errors
+            }
+
+            // --- Simplified Core Web Vitals heuristics ---
+            // DOM size heuristic
+            try {
+                const domSize = $('*').length;
+                metadata.domSize = domSize;
+                if (domSize > 1500) {
+                    metadata.seoIssues.push(`Duży rozmiar DOM (${domSize} elementów)`);
+                }
+            } catch (e) {
+                metadata.domSize = 0;
+            }
+
+            // Count external scripts
+            try {
+                const scriptCount = $('script[src]').length;
+                metadata.scriptCount = scriptCount;
+                if (scriptCount > 20) {
+                    metadata.seoIssues.push(`Zbyt wiele zewnętrznych skryptów (${scriptCount})`);
+                }
+            } catch (e) {
+                metadata.scriptCount = 0;
+            }
+
+            // Large image heuristic: check size of up to 3 images via HEAD
+            try {
+                const imgSrcs = $('img[src]').map((i, el) => makeAbs($(el).attr('src'))).get();
+                const unique = [...new Set(imgSrcs)].slice(0, 3);
+                let largestBytes = 0;
+                for (const imgUrl of unique) {
+                    if (!imgUrl) continue;
+                    try {
+                        const headResp = await axios.head(imgUrl, { timeout: 5000 });
+                        const len = headResp.headers && headResp.headers['content-length'] ? parseInt(headResp.headers['content-length'], 10) : 0;
+                        if (!isNaN(len) && len > largestBytes) {
+                            largestBytes = len;
+                        }
+                    } catch (e) {
+                        // ignore failure to fetch image size
+                    }
+                }
+                metadata.largestImageBytes = largestBytes;
+                if (largestBytes > 1000000) {
+                    metadata.seoIssues.push('Duży obraz (>1MB) - może negatywnie wpływać na wydajność (LCP)');
+                }
+            } catch (e) {
+                metadata.largestImageBytes = 0;
             }
             
             metadata.seoScore = Math.max(0, 100 - (metadata.seoIssues.length * 10));
