@@ -4,6 +4,7 @@
 // Następnie otwórz: http://localhost:3000
 
 import express from 'express';
+const VERSION = '1.1.0';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import xml2js from 'xml2js';
