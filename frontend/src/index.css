@@ -1,0 +1,108 @@
+/*
+ * Global styles for the SEO analyzer front‑end.  We define CSS
+ * variables to make it easy to switch between light and dark themes.
+ * The `.dark` class on the root element (document.documentElement)
+ * toggles the values of these variables.  See App.jsx for the code
+ * that applies this class based on the user's selection.  Components
+ * throughout the application inherit these variables to ensure a
+ * cohesive look.
+ */
+
+/* Light theme (default) variables */
+:root {
+  --bg-color: #f9fafb;
+  --text-color: #111827;
+  --primary-color: #2563eb;
+  --secondary-color: #6b7280;
+  --border-color: #d1d5db;
+}
+
+/* Dark theme overrides */
+.dark {
+  --bg-color: #0d1117;
+  --text-color: #f3f4f6;
+  --primary-color: #3b82f6;
+  --secondary-color: #9ca3af;
+  --border-color: #374151;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+h1, h2, h3 {
+  margin: 0 0 0.75rem 0;
+  font-weight: 600;
+}
+
+label {
+  display: block;
+  margin-top: 0.5rem;
+  margin-bottom: 0.25rem;
+  color: var(--text-color);
+}
+
+input[type='text'], textarea {
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background-color: transparent;
+  color: var(--text-color);
+}
+
+input[type='checkbox'] {
+  margin-right: 0.5rem;
+}
+
+button {
+  background-color: var(--primary-color);
+  color: #fff;
+  border: none;
+  padding: 0.5rem 1rem;
+  margin-right: 0.5rem;
+  margin-top: 0.5rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+button[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 8px;
+  background-color: var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 0.25rem;
+}
+
+.progress-bar-inner {
+  height: 100%;
+  background-color: var(--primary-color);
+  transition: width 0.2s ease;
+}
+
+.settings {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
